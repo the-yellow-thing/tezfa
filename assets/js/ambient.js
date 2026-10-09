@@ -220,15 +220,17 @@
     function later(fn, ms) { timers.push(setTimeout(fn, ms)); }
 
     function build() {
-      if (!buffers) buffers = { brown: noise('brown', 7), pink: noise('pink', 5) };
+      if (!buffers) buffers = { pink: noise('pink', 5) };
       var now = A.currentTime, srcs = [];
       G = { master: gain(0.0001), duck: gain(1), srcs: srcs };
-      G.duck.connect(G.master); G.master.connect(out());
+      /* no rumble: cut everything below ~250 Hz on the whole soundscape */
+      var hp1 = filt('highpass', 250, 0.7), hp2 = filt('highpass', 250, 0.7);
+      G.duck.connect(hp1); hp1.connect(hp2); hp2.connect(G.master); G.master.connect(out());
 
-      /* wind: brown noise, low-passed, with slow gusts */
-      var wind = loop(buffers.brown, 0.9), wlp = filt('lowpass', 420, 0.5), wg = gain(0.7);
+      /* wind: airy pink noise in a high band, silent between gusts */
+      var wind = loop(buffers.pink, 0.9), wlp = filt('bandpass', 1400, 0.7), wg = gain(0.0001);
       G.wind = gain(0.0); wind.connect(wlp); wlp.connect(wg); wg.connect(G.wind); G.wind.connect(G.duck);
-      srcs.push(wind, lfo(0.06, 90, wlp.frequency));
+      srcs.push(wind);
       G.windFilter = wlp; G.windGust = wg;
 
       /* water: pink noise, band-passed, with fast small flutter (the "babble") */
@@ -240,19 +242,12 @@
       wg2.connect(wpan); wpan.connect(G.water); G.water.connect(G.duck);
       srcs.push(water, lfo(5.3, 0.12, wg2.gain), lfo(8.9, 0.07, wg2.gain), lfo(0.41, 260, wbp.frequency), lfo(0.67, 420, wbp2.frequency));
 
-      /* drone: a very low, barely-there fifth */
-      G.drone = gain(0.0); var dlp = filt('lowpass', 240, 0.3); dlp.connect(G.drone); G.drone.connect(G.duck);
-      [55, 82.6, 110.3].forEach(function (f, i) {
-        var o = A.createOscillator(), g = gain([0.6, 0.35, 0.18][i]); o.frequency.value = f; o.connect(g); g.connect(dlp); srcs.push(o);
-      });
-      srcs.push(lfo(0.031, 0.004, G.drone.gain));
 
       /* birds: own bus with a soft distant echo */
       G.birds = gain(1); var dl = A.createDelay(1), fb = gain(0.28), dlpf = filt('lowpass', 3200, 0.5), wet = gain(0.22);
       G.birds.connect(G.duck); G.birds.connect(dl); dl.delayTime.value = 0.21; dl.connect(dlpf); dlpf.connect(fb); fb.connect(dl); dlpf.connect(wet); wet.connect(G.duck);
 
       srcs.forEach(function (s) { s.start(now); });
-      G.drone.gain.setTargetAtTime(0.012, now, 2);
       gust(); birdLater(); mix(true);
     }
     function teardown() {
@@ -266,10 +261,15 @@
       if (!G) return;
       if (running()) {
         var t = A.currentTime;
-        G.windFilter.frequency.setTargetAtTime(rand(260, 820), t, rand(1.8, 3.2));
-        G.windGust.gain.setTargetAtTime(rand(0.4, 1), t, rand(1.8, 3.2));
+        var up = rand(2, 4), hold = rand(0.5, 1.5);
+        G.windFilter.frequency.cancelScheduledValues(t); G.windGust.gain.cancelScheduledValues(t);
+        G.windFilter.frequency.setValueAtTime(rand(900, 1300), t);
+        G.windFilter.frequency.linearRampToValueAtTime(rand(1600, 2200), t + up);
+        G.windGust.gain.setValueAtTime(0.0001, t);
+        G.windGust.gain.linearRampToValueAtTime(rand(0.5, 1), t + up);
+        G.windGust.gain.setTargetAtTime(0.0001, t + up + hold, rand(0.9, 1.6));
       }
-      later(gust, rand(3500, 8000));
+      later(gust, rand(8000, 16000));
     }
 
     /* sparse birdsong: short swept sine chirps, randomly panned */
@@ -300,8 +300,8 @@
       birdLevel = current[15];
       if (!G || !running()) return;
       var t = A.currentTime, tc = now ? 0.05 : 1.5;
-      G.wind.gain.setTargetAtTime(0.30 * current[13], t, tc);
-      G.water.gain.setTargetAtTime(0.11 * current[14], t, tc);
+      G.wind.gain.setTargetAtTime(0.10 * current[13], t, tc);
+      G.water.gain.setTargetAtTime(0.05 * current[14], t, tc);
     }
 
     /* a soft bowl-like tone; used by section cues and toggle feedback */
