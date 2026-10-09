@@ -14,13 +14,14 @@
   --mt-parchment:  #efe6d5;   /* "meets you where you are" panel */
   --mt-sage:       #7a9a4a;   /* the word SEE., nature accents */
   --mt-sky:        #7fa6c9;   /* Deep Rest icon blue */
-  --mt-muted:      rgba(243, 234, 219, .62); /* secondary text on dark */
+  --mt-muted:      rgba(243, 234, 219, .82); /* secondary text on dark (the poster never greys its copy) */
+  --mt-muted-soft: rgba(243, 234, 219, .62); /* tertiary: nav links, labels, footer small */
   --mt-muted-light: rgba(13, 20, 16, .62);   /* secondary text on cream */
 
   /* Type — Google Fonts matches for the poster's classical serif, humanist sans, script signature */
   --mt-font-display: "Cormorant Garamond", "Cormorant", Georgia, "Times New Roman", serif;
   --mt-font-body:    "Jost", "Avenir Next", "Avenir", "Helvetica Neue", Arial, sans-serif;
-  --mt-font-script:  "Allura", "Dancing Script", "Brush Script MT", cursive;
+  --mt-font-script:  "Cookie", "Dancing Script", "Brush Script MT", cursive;
 
   /* Scale (fluid). Display sizes mirror the poster: MYSTIQUE smaller, TAO very large. */
   --mt-size-eyebrow: clamp(.68rem, .62rem + .3vw, .8rem);

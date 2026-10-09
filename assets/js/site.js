@@ -39,16 +39,18 @@
   var phases = [{ t: 0, text: 'Breathe in' }, { t: IN, text: 'Hold' }, { t: IN + HOLD, text: 'Breathe out' }];
   var timers = [];
   var soundOn = false, audio = null;
+  var t0 = performance.now(), holdUntil = 0; /* passive-label phase anchor; hold-off while 'Welcome.' shows */
 
   function setLabel(text) {
     if (!label) return;
     label.classList.add('is-fading');
-    setTimeout(function () { label.textContent = text; label.classList.remove('is-fading'); }, 250);
+    setTimeout(function () { label.textContent = text; label.classList.remove('is-fading'); }, 300);
   }
   function clearTimers() { timers.forEach(clearTimeout); timers = []; }
   function restartAnimation() {
     /* restart the CSS keyframes so the ring and the labels start together */
-    [ring, halo].forEach(function (el) { if (!el) return; el.style.animation = 'none'; void el.offsetWidth; el.style.animation = ''; });
+    [ring, halo].forEach(function (el) { if (!el) return; el.style.animation = 'none'; void el.getBoundingClientRect(); el.style.animation = ''; });
+    t0 = performance.now();
   }
 
   /* Soft synthesized bowl tone: a few decaying sine partials. Only after a user gesture, off by default. */
@@ -74,8 +76,10 @@
   function runCycle(n, total) {
     if (n >= total) {
       setLabel('Welcome.');
+      holdUntil = performance.now() + 6000;
       breath.classList.remove('is-guided');
-      if (startBtn) { startBtn.disabled = false; startBtn.textContent = 'Once more'; }
+      if (startBtn) { startBtn.removeAttribute('aria-disabled'); startBtn.textContent = 'Once more'; }
+      timers.push(setTimeout(function () { if (label) label.removeAttribute('aria-live'); }, 1500));
       return;
     }
     phases.forEach(function (p, i) {
@@ -85,10 +89,13 @@
   }
 
   if (startBtn) startBtn.addEventListener('click', function () {
+    if (startBtn.getAttribute('aria-disabled') === 'true') return;
     clearTimers();
+    holdUntil = 0;
     if (soundOn && audio && audio.state === 'suspended') audio.resume();
+    if (label) label.setAttribute('aria-live', 'polite'); /* announce phases only during a run the user started */
     breath.classList.add('is-guided');
-    startBtn.disabled = true; startBtn.textContent = 'Breathing…';
+    startBtn.setAttribute('aria-disabled', 'true'); startBtn.textContent = 'Breathing…';
     if (reduceMotion) {
       /* no animation: read the phases as text at the same pace */
       runCycle(0, 3);
@@ -99,26 +106,27 @@
   });
 
   if (soundBtn) soundBtn.addEventListener('click', function () {
+    if (soundBtn.getAttribute('aria-disabled') === 'true') return;
     var Ctx = window.AudioContext || window.webkitAudioContext;
-    if (!Ctx) { soundBtn.disabled = true; if (soundLabel) soundLabel.textContent = 'No sound here'; return; }
+    if (!Ctx) { soundBtn.setAttribute('aria-disabled', 'true'); if (soundLabel) soundLabel.textContent = 'No sound here'; return; }
     if (!audio) audio = new Ctx();
     if (audio.state === 'suspended') audio.resume();
     soundOn = !soundOn;
     soundBtn.setAttribute('aria-pressed', soundOn ? 'true' : 'false');
     if (soundLabel) soundLabel.textContent = soundOn ? 'Sound on' : 'Sound off';
-    if (soundOn) tone(261.6, 0.14, 3.0);
+    if (soundOn) { tone(261.6, 0.14, 3.0); } else if (audio && audio.state === 'running') { setTimeout(function () { if (!soundOn) audio.suspend(); }, 3200); }
   });
 
-  /* Passive mode: keep the label loosely in step with the always-on CSS animation */
+  /* Passive mode: keep the label loosely in step with the always-on CSS animation (a few wake-ups per cycle, no rAF) */
   if (!reduceMotion) {
-    var t0 = performance.now();
     (function tick() {
+      if (performance.now() < holdUntil) { setTimeout(tick, 250); return; }
       if (!breath.classList.contains('is-guided')) {
         var t = (performance.now() - t0) % CYCLE;
         var text = t < IN ? phases[0].text : t < IN + HOLD ? phases[1].text : phases[2].text;
         if (label && label.textContent !== text && !label.classList.contains('is-fading')) setLabel(text);
       }
-      requestAnimationFrame(tick);
+      setTimeout(tick, 250);
     })();
   } else if (label) {
     label.textContent = 'Breathe in. Hold. Breathe out.';
