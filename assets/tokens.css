@@ -1,0 +1,53 @@
+/* Mystique Tao — design tokens extracted from the teaser poster.
+   Keep this file the single source of truth for colour, type and rhythm. */
+:root {
+  /* Colour — observed on the poster */
+  --mt-ink:        #0d1410;   /* near-black forest green: page background */
+  --mt-ink-2:      #142019;   /* slightly lifted panels */
+  --mt-ink-3:      #1d2b22;   /* borders, hairlines on dark */
+  --mt-orange:     #e8722c;   /* primary accent: TAO, enso, Tezpha signature */
+  --mt-orange-2:   #f08a3e;   /* hover / glow */
+  --mt-gold:       #c9a45c;   /* rules, ornaments, lotus, icon strokes */
+  --mt-gold-2:     #d9b06a;
+  --mt-cream:      #f3eadb;   /* text on dark; light panel */
+  --mt-cream-2:    #e9dfcc;   /* light panel shade */
+  --mt-parchment:  #efe6d5;   /* "meets you where you are" panel */
+  --mt-sage:       #7a9a4a;   /* the word SEE., nature accents */
+  --mt-sky:        #7fa6c9;   /* Deep Rest icon blue */
+  --mt-muted:      rgba(243, 234, 219, .62); /* secondary text on dark */
+  --mt-muted-light: rgba(13, 20, 16, .62);   /* secondary text on cream */
+
+  /* Type — Google Fonts matches for the poster's classical serif, humanist sans, script signature */
+  --mt-font-display: "Cormorant Garamond", "Cormorant", Georgia, "Times New Roman", serif;
+  --mt-font-body:    "Jost", "Avenir Next", "Avenir", "Helvetica Neue", Arial, sans-serif;
+  --mt-font-script:  "Allura", "Dancing Script", "Brush Script MT", cursive;
+
+  /* Scale (fluid). Display sizes mirror the poster: MYSTIQUE smaller, TAO very large. */
+  --mt-size-eyebrow: clamp(.68rem, .62rem + .3vw, .8rem);
+  --mt-size-body:    clamp(1rem, .96rem + .25vw, 1.125rem);
+  --mt-size-lead:    clamp(1.15rem, 1rem + .7vw, 1.5rem);
+  --mt-size-h3:      clamp(1.25rem, 1.1rem + .8vw, 1.75rem);
+  --mt-size-h2:      clamp(1.9rem, 1.4rem + 2.2vw, 3.2rem);
+  --mt-size-mystique: clamp(2.2rem, 1.2rem + 5vw, 5.2rem);
+  --mt-size-tao:      clamp(4.6rem, 2.2rem + 12vw, 12rem);
+
+  /* Tracking — the poster uses very wide tracking on small caps */
+  --mt-track-wide:  .32em;
+  --mt-track-caps:  .18em;
+  --mt-track-display: .14em;
+
+  /* Rhythm */
+  --mt-space-1: .5rem;  --mt-space-2: 1rem;  --mt-space-3: 1.5rem;  --mt-space-4: 2.5rem;
+  --mt-space-5: 4rem;   --mt-space-6: 6rem;  --mt-space-7: 9rem;
+  --mt-measure: 62ch;
+  --mt-gutter: clamp(16px, 4vw, 48px);
+  --mt-max: 1180px;
+
+  /* Motion — slow, breath-like. One breath cycle ≈ 10s (4s in, 2s hold, 4s out). */
+  --mt-breath: 10s;
+  --mt-ease: cubic-bezier(.42, 0, .2, 1);
+  --mt-reveal: 900ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root { --mt-breath: 0s; --mt-reveal: 0ms; }
+}
