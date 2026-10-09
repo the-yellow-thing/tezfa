@@ -3,6 +3,21 @@
   'use strict';
   var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+  /* ---- One shared AudioContext for the bowl chimes and the nature soundscape (ambient.js).
+     Created lazily, only from a user gesture. Returns null where Web Audio is missing.
+     Every sound on the page goes through MT.out, so the global mute silences all of it. ---- */
+  var MT = window.MT = window.MT || {};
+  MT.audio = function () {
+    if (MT._ctx) return MT._ctx;
+    var Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return null;
+    try { MT._ctx = new Ctx(); } catch (e) { return null; }
+    MT.out = MT._ctx.createGain();
+    MT.out.gain.value = MT.muted ? 0 : 1;
+    MT.out.connect(MT._ctx.destination);
+    return MT._ctx;
+  };
+
   /* ---- Nav: compact after the first scroll ---- */
   var nav = document.querySelector('.nav');
   function onScroll() { if (nav) nav.classList.toggle('is-scrolled', window.scrollY > 24); }
@@ -64,13 +79,15 @@
       g.gain.setValueAtTime(0.0001, now);
       g.gain.exponentialRampToValueAtTime(peak, now + 0.08);
       g.gain.exponentialRampToValueAtTime(0.0001, now + seconds);
-      o.connect(g); g.connect(audio.destination); o.start(now); o.stop(now + seconds + 0.1);
+      o.connect(g); g.connect(MT.out || audio.destination); o.start(now); o.stop(now + seconds + 0.1);
     });
   }
   function chime(phaseIndex) {
     if (!soundOn || !audio) return;
     var f = [196.0, 261.6, 174.6][phaseIndex]; /* G3, C4, F3 — gentle, bowl-like intervals */
-    tone(f, 0.18, phaseIndex === 1 ? 2.5 : 4.5);
+    var secs = phaseIndex === 1 ? 2.5 : 4.5;
+    if (MT.duck) MT.duck(secs); /* let the bowl ring out over the soundscape */
+    tone(f, 0.18, secs);
   }
 
   function runCycle(n, total) {
@@ -107,14 +124,14 @@
 
   if (soundBtn) soundBtn.addEventListener('click', function () {
     if (soundBtn.getAttribute('aria-disabled') === 'true') return;
-    var Ctx = window.AudioContext || window.webkitAudioContext;
-    if (!Ctx) { soundBtn.setAttribute('aria-disabled', 'true'); if (soundLabel) soundLabel.textContent = 'No sound here'; return; }
-    if (!audio) audio = new Ctx();
+    if (!audio) audio = MT.audio();
+    if (!audio) { soundBtn.setAttribute('aria-disabled', 'true'); if (soundLabel) soundLabel.textContent = 'No sound here'; return; }
     if (audio.state === 'suspended') audio.resume();
     soundOn = !soundOn;
+    if (soundOn && MT.muted && MT.setMuted) MT.setMuted(false); /* asking for the bowl means sound is wanted */
     soundBtn.setAttribute('aria-pressed', soundOn ? 'true' : 'false');
     if (soundLabel) soundLabel.textContent = soundOn ? 'Sound on' : 'Sound off';
-    if (soundOn) { tone(261.6, 0.14, 3.0); } else if (audio && audio.state === 'running') { setTimeout(function () { if (!soundOn) audio.suspend(); }, 3200); }
+    if (soundOn) { tone(261.6, 0.14, 3.0); }
   });
 
   /* Passive mode: keep the label loosely in step with the always-on CSS animation (a few wake-ups per cycle, no rAF) */
