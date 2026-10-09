@@ -125,6 +125,7 @@ main:focus { outline: none; }
 .nav__links a::after { content: ""; position: absolute; left: 0; right: 0; top: -.4rem; bottom: -.4rem; } /* 44px tap target */
 .nav__links a:hover, .nav__links a:focus-visible { color: var(--mt-cream); border-bottom-color: rgba(201, 164, 92, .6); }
 .nav__links .nav__cta { color: var(--mt-gold); }
+@media (max-width: 1023px) { .nav__links .nav__more { display: none; } } /* the extra links only where they fit */
 
 /* ---------- Hero ---------- */
 .hero {
@@ -373,8 +374,9 @@ main:focus { outline: none; }
 /* ---------- Where: Dahab (large, now) and Italy (small, origin) ---------- */
 .where { position: relative; padding: var(--mt-space-6) var(--mt-gutter) var(--mt-space-7); overflow: hidden; background: radial-gradient(70% 45% at 60% 62%, rgb(var(--mt-tint) / .10), transparent 70%); }
 .where__inner { position: relative; max-width: var(--mt-max); margin: 0 auto; }
-.where__head { max-width: 46rem; margin: 0 auto var(--mt-space-5); text-align: center; }
+.where__head { max-width: 52rem; margin: 0 auto var(--mt-space-5); text-align: center; }
 .where__then { display: block; font-size: .55em; font-style: italic; font-weight: 400; color: var(--mt-gold-2); margin-bottom: .3em; }
+.where__title, .where__lead { text-wrap: balance; }
 .where__lead { margin-top: var(--mt-space-3); color: var(--mt-muted); font-size: var(--mt-size-lead); line-height: 1.5; }
 .where__places { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 30%); gap: clamp(1.5rem, 4vw, 4rem); align-items: end; }
 .place { margin: 0; position: relative; }
@@ -559,4 +561,4 @@ main:focus { outline: none; }
 @media (max-width: 374px) { [data-breath-start] { font-size: .72rem; letter-spacing: .14em; padding-inline: 1.2rem; } .context__name { letter-spacing: .1em; } }
 
 /* The list reset (ul[role="list"] { margin: 0 }) outranks .pillars; re-centre the row. */
-ul.pillars { margin-inline: auto; }
+ul.pillars, ul.ways__list, ul.videos { margin-inline: auto; }

@@ -87,7 +87,8 @@ ul.m-facts {
 }
 
 /* ---------- 2. Seven principles (moonlit twilight) ---------- */
-.m-principles { background: radial-gradient(55% 40% at 50% 8%, rgba(66, 128, 162, .10), transparent 70%); }
+/* glows use closest-side ellipses so they fade out before any section edge (no seams) */
+.m-principles { background: radial-gradient(closest-side at 50% 22%, rgba(66, 128, 162, .12), transparent); }
 .m-plist { list-style: none; margin: 0 auto; padding: 0; max-width: var(--mt-max); }
 .m-p {
   display: grid; grid-template-columns: minmax(15rem, 1fr) 1.45fr 1.45fr; gap: 1.2rem clamp(1.5rem, 4vw, 3.5rem);
@@ -113,7 +114,7 @@ ul.m-facts {
 .m-p__text--soft { color: var(--mt-muted); }
 
 /* ---------- 3. Three dualities (candle) ---------- */
-.m-duals { background: radial-gradient(60% 55% at 50% 45%, rgba(204, 86, 58, .09), transparent 70%); }
+.m-duals { background: radial-gradient(closest-side at 50% 50%, rgba(204, 86, 58, .11), transparent); }
 ul.m-duals__list { list-style: none; margin: 0 auto; padding: 0; max-width: var(--mt-max); display: grid; grid-template-columns: repeat(3, 1fr); }
 .m-dual { text-align: center; padding: var(--mt-space-2) clamp(1rem, 3vw, 2.75rem) var(--mt-space-3); border-left: 1px solid rgba(201, 164, 92, .18); }
 .m-dual:first-child { border-left: 0; }
@@ -151,8 +152,11 @@ ul.m-duals__list { list-style: none; margin: 0 auto; padding: 0; max-width: var(
 /* ---------- 4. The person (parchment, dawn) ---------- */
 .m-person {
   --m-ink-text: rgba(13, 20, 16, .78);
+  --m-hz: clamp(110px, 16vw, 200px); /* horizon strip height */
   position: relative; overflow: hidden; color: var(--mt-ink);
-  background: linear-gradient(180deg, var(--mt-parchment), var(--mt-cream-2));
+  /* parchment stops where the horizon is opaque; below it the page ground (and its grain) shows through,
+     so the strip's faded foot meets the next section without a seam */
+  background: linear-gradient(180deg, var(--mt-parchment), var(--mt-cream-2)) top / 100% calc(100% - var(--m-hz) * .4) no-repeat;
   padding: var(--mt-space-6) var(--mt-gutter) 0; margin-top: var(--mt-space-4);
   clip-path: polygon(0 2%, 4% .4%, 12% 1.8%, 22% .2%, 33% 1.7%, 45% .3%, 57% 1.8%, 69% .3%, 80% 1.7%, 90% .3%, 100% 1.6%, 100% 100%, 0 100%);
   scroll-margin-top: 4.75rem;
@@ -178,14 +182,14 @@ ul.m-duals__list { list-style: none; margin: 0 auto; padding: 0; max-width: var(
 .m-layers__via { font-size: .7rem; letter-spacing: .14em; text-transform: uppercase; color: var(--m-ink-text); }
 .m-layers__whole .m-layers__word { font-weight: 600; }
 .m-person__horizon {
-  position: relative; height: clamp(110px, 16vw, 200px); margin: calc(-1 * var(--mt-space-4)) calc(-1 * var(--mt-gutter)) 0;
+  position: relative; height: var(--m-hz); margin: calc(-1 * var(--mt-space-4)) calc(-1 * var(--mt-gutter)) 0;
   background: url("../img/atmos-mountains.jpg") center 40% / cover no-repeat;
-  -webkit-mask-image: linear-gradient(180deg, transparent, #000 55%, #000); mask-image: linear-gradient(180deg, transparent, #000 55%, #000);
+  -webkit-mask-image: linear-gradient(180deg, transparent, #000 50%, #000 66%, transparent); mask-image: linear-gradient(180deg, transparent, #000 50%, #000 66%, transparent);
 }
 .m-person__horizon::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(239, 230, 213, 0) 0%, rgba(13, 20, 16, .15) 60%, rgb(var(--mt-bg-shift)) 100%); }
 
 /* ---------- 5. Session: the arc (moss) ---------- */
-.m-session { background: radial-gradient(60% 35% at 50% 6%, rgba(108, 152, 58, .09), transparent 70%); }
+.m-session { background: radial-gradient(closest-side at 50% 16%, rgba(108, 152, 58, .11), transparent); }
 .m-arc { max-width: var(--mt-max); margin: 0 auto; }
 .m-arc__curve { position: relative; height: 130px; margin: 0 0 var(--mt-space-3); }
 .m-arc__curve svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }

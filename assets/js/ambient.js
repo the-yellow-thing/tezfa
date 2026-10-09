@@ -9,7 +9,7 @@
   /* =====================================================================
      1. Palettes: one "time of day" per section, interpolated by scroll.
      Flat arrays: bg rgb (body), tint rgb (mist), glow rgb (accent glows),
-     mote rgb, mist strength, then the sound mix: wind, water (stream), birds, sea, desert wind.
+     mote rgb, mist strength, then sound levels (index 13 drives rain weight and droplet density; the rest are unused).
      cue: the arrival sound for that section, steps of [kind, delay s, a, b, c]:
        gong  a = fundamental Hz (70–140), b = decay s, c = pan
        drum  a = Hz, b = level scale
@@ -214,20 +214,20 @@
     function osc(f) { var o = A.createOscillator(); o.frequency.value = f; return o; }
     function hold(param, t) { if (param.cancelAndHoldAtTime) param.cancelAndHoldAtTime(t); else { param.cancelScheduledValues(t); param.setValueAtTime(param.value, t); } }
 
-    /* Seamless looping noise: generate a little extra and cross-fade the tail into the head. */
+    /* Looping noise. No crossfade at the loop point: noise is discontinuous at every sample anyway,
+       and a fade makes a dip in level once per loop that the ear reads as a slow pulse. */
     function noise(kind, seconds) {
-      var sr = A.sampleRate, len = Math.floor(sr * seconds), fade = Math.floor(sr * 0.5);
-      var buf = A.createBuffer(2, len, sr);
-      for (var c = 0; c < 2; c++) {
+      var sr = A.sampleRate, len = Math.floor(sr * seconds), fade = 0;
+      var buf = A.createBuffer(1, len, sr); /* mono: stereo width comes from the panners */
+      for (var c = 0; c < 1; c++) {
         var tmp = new Float32Array(len + fade), d = buf.getChannelData(c), i, w, last = 0;
-        var b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+        var b0 = 0, b1 = 0, b2 = 0;
         for (i = 0; i < tmp.length; i++) {
           w = Math.random() * 2 - 1;
           if (kind === 'brown') { last = (last + 0.02 * w) / 1.02; tmp[i] = last * 3.5; }
-          else { /* pink (Paul Kellet) */
-            b0 = 0.99886 * b0 + w * 0.0555179; b1 = 0.99332 * b1 + w * 0.0750759; b2 = 0.96900 * b2 + w * 0.1538520;
-            b3 = 0.86650 * b3 + w * 0.3104856; b4 = 0.55000 * b4 + w * 0.5329522; b5 = -0.7616 * b5 - w * 0.0168980;
-            tmp[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + w * 0.5362) * 0.11; b6 = w * 0.115926;
+          else { /* pink: three one-pole stages (Kellet's economy form); measured free of amplitude pulsing */
+            b0 = 0.99765 * b0 + w * 0.0990460; b1 = 0.96300 * b1 + w * 0.2965164; b2 = 0.57000 * b2 + w * 1.0526913;
+            tmp[i] = (b0 + b1 + b2 + w * 0.1848) * 0.2;
           }
         }
         for (i = 0; i < len; i++) d[i] = tmp[i];
@@ -249,40 +249,23 @@
       var hp1 = filt('highpass', 250, 0.7), hp2 = filt('highpass', 250, 0.7);
       G.duck.connect(hp1); hp1.connect(hp2); hp2.connect(G.master); G.master.connect(out());
 
-      /* wind: airy pink noise in a high band, silent between gusts */
-      var wind = loop(buffers.pink, 0.9), wlp = filt('bandpass', 1400, 0.7), wg = gain(0.0001);
-      G.wind = gain(0.0); wind.connect(wlp); wlp.connect(wg); wg.connect(G.wind); G.wind.connect(G.duck);
-      srcs.push(wind);
-      G.windFilter = wlp; G.windGust = wg;
+      /* ---- Rain: the only continuous layer. Pink noise high-passed so it hisses on leaves, never rumbles.
+         No periodic modulation anywhere (a pulsing noise bed is what reads as a train). ---- */
+      var rainA = loop(buffers.pink, 1.0), rhp = filt('highpass', 1500, 0.6), rsh = filt('highshelf', 6000, 0.7);
+      rsh.gain.value = -6;
+      var rainB = loop(buffers.pink, 1.37), rbp = filt('bandpass', 3800, 0.5), rbg = gain(0.5), rpan = panner(0.25);
+      G.rainBody = gain(0.8); G.rain = gain(0.0);
+      rainA.connect(rhp); rhp.connect(rsh); rsh.connect(G.rainBody);
+      rainB.connect(rbp); rbp.connect(rbg); rbg.connect(rpan); rpan.connect(G.rainBody);
+      G.rainBody.connect(G.rain); G.rain.connect(G.duck);
+      rainB.offset = 2.3; srcs.push(rainA, rainB);
 
-      /* water: pink noise, band-passed, with fast small flutter (the "babble") */
-      var water = loop(buffers.pink, 1), whp = filt('highpass', 1400, 0.7), wbp = filt('bandpass', 2200, 0.9);
-      var wbp2 = filt('bandpass', 3400, 1.3), wg2 = gain(0.5), wpan = A.createStereoPanner ? A.createStereoPanner() : gain(1);
-      if (wpan.pan) wpan.pan.value = -0.3;
-      G.water = gain(0.0);
-      water.connect(whp); whp.connect(wbp); whp.connect(wbp2); wbp.connect(wg2); wbp2.connect(wg2);
-      wg2.connect(wpan); wpan.connect(G.water); G.water.connect(G.duck);
-      srcs.push(water, lfo(5.3, 0.12, wg2.gain), lfo(8.9, 0.07, wg2.gain), lfo(0.41, 260, wbp.frequency), lfo(0.67, 420, wbp2.frequency));
-
-
-      /* sea: one surge at a time, a hiss that rises and draws back over sand, silence between */
-      var sea = loop(buffers.pink, 0.94), shp = filt('highpass', 250, 0.7), sbp = filt('bandpass', 600, 0.6), span = panner(0.15);
-      G.seaSurge = gain(0); G.seaBand = sbp; G.sea = gain(0);
-      sea.connect(shp); shp.connect(sbp); sbp.connect(G.seaSurge); G.seaSurge.connect(span); span.connect(G.sea); G.sea.connect(G.duck);
-      sea.offset = 1.7; srcs.push(sea);
-
-      /* desert wind: warmer, lower-mid gusts with a faint whistle; also comes and goes */
-      var des = loop(buffers.pink, 0.83), dbp = filt('bandpass', 650, 1.4), dwh = filt('bandpass', 1250, 9), dwg = gain(0.35);
-      G.desGust = gain(0); G.desBand = dbp; G.desert = gain(0);
-      des.connect(dbp); dbp.connect(G.desGust); des.connect(dwh); dwh.connect(dwg); dwg.connect(G.desGust); G.desGust.connect(G.desert); G.desert.connect(G.duck);
-      des.offset = 3.1; srcs.push(des, lfo(0.05, 180, dwh.frequency));
-
-      /* birds: own bus with a soft distant echo */
-      G.birds = gain(1); var dl = A.createDelay(1), fb = gain(0.28), dlpf = filt('lowpass', 3200, 0.5), wet = gain(0.22);
-      G.birds.connect(G.duck); G.birds.connect(dl); dl.delayTime.value = 0.21; dl.connect(dlpf); dlpf.connect(fb); fb.connect(dl); dlpf.connect(wet); wet.connect(G.duck);
+      /* droplets: their own quiet bus with a small damp echo */
+      G.drops = gain(1); var ddl = A.createDelay(1), dfb = gain(0.2), dlpf = filt('lowpass', 4000, 0.5), dwet = gain(0.18);
+      G.drops.connect(G.duck); G.drops.connect(ddl); ddl.delayTime.value = 0.17; ddl.connect(dlpf); dlpf.connect(dfb); dfb.connect(ddl); dlpf.connect(dwet); dwet.connect(G.duck);
 
       srcs.forEach(function (s) { if (s.offset) s.start(now, s.offset); else s.start(now); });
-      gust(); later(wave, 1200); later(desertGust, 5000); birdLater(); mix(true);
+      drift(); dropLater(); gongLater(rand(14000, 24000)); mix(true);
     }
     function teardown() {
       timers.forEach(clearTimeout); timers = [];
@@ -291,84 +274,33 @@
       try { G.master.disconnect(); } catch (e) { /* already gone */ }
       G = null;
     }
-    function gust() {
+    /* the rain's weight wanders slowly and irregularly: heavier, lighter, never in a rhythm */
+    function drift() {
       if (!G) return;
-      if (running()) {
-        var t = A.currentTime;
-        var up = rand(2, 4), hold = rand(0.5, 1.5);
-        G.windFilter.frequency.cancelScheduledValues(t); G.windGust.gain.cancelScheduledValues(t);
-        G.windFilter.frequency.setValueAtTime(rand(900, 1300), t);
-        G.windFilter.frequency.linearRampToValueAtTime(rand(1600, 2200), t + up);
-        G.windGust.gain.setValueAtTime(0.0001, t);
-        G.windGust.gain.linearRampToValueAtTime(rand(0.5, 1), t + up);
-        G.windGust.gain.setTargetAtTime(0.0001, t + up + hold, rand(0.9, 1.6));
-      }
-      later(gust, rand(8000, 16000));
+      if (running()) G.rainBody.gain.setTargetAtTime(rand(0.45, 1), A.currentTime, rand(3, 6));
+      later(drift, rand(7000, 16000));
     }
-
-    /* a wave: builds over ~2 s, breaks, recedes as a brighter hiss over 3–4 s, then nothing */
-    function wave() {
-      if (!G) return;
-      var rise = rand(1.7, 2.3), fall = rand(3, 4);
-      if (running()) {
-        var t = A.currentTime + 0.05, peak = rand(0.6, 1), g = G.seaSurge.gain, f = G.seaBand.frequency;
-        hold(g, t); hold(f, t);
-        g.linearRampToValueAtTime(peak * 0.2, t + rise * 0.4);
-        g.linearRampToValueAtTime(peak, t + rise);
-        g.linearRampToValueAtTime(peak * 0.35, t + rise + fall * 0.4);
-        g.linearRampToValueAtTime(0, t + rise + fall);
-        f.exponentialRampToValueAtTime(rand(1300, 1800), t + rise);
-        f.exponentialRampToValueAtTime(rand(2400, 3000), t + rise + fall * 0.5);
-        f.exponentialRampToValueAtTime(600, t + rise + fall);
-      }
-      later(wave, (rise + fall) * 1000 + rand(1500, 4500)); /* a surge every ~6.5–10.5 s */
-    }
-    function desertGust() {
-      if (!G) return;
-      var rise = rand(1.5, 2.5), fall = rand(2, 3);
-      if (running()) {
-        var t = A.currentTime + 0.05, g = G.desGust.gain, f = G.desBand.frequency;
-        hold(g, t); hold(f, t);
-        g.linearRampToValueAtTime(rand(0.5, 1), t + rise);
-        g.linearRampToValueAtTime(0, t + rise + fall);
-        f.exponentialRampToValueAtTime(rand(800, 1000), t + rise);
-        f.exponentialRampToValueAtTime(560, t + rise + fall);
-      }
-      later(desertGust, (rise + fall) * 1000 + rand(5000, 12000));
-    }
-
-    /* sparse birdsong: short swept sine chirps, randomly panned */
-    var birdLevel = 0.5;
-    function birdLater() { later(function () { bird(); birdLater(); }, (4 + Math.random() * 11 * (1.15 - 0.5 * birdLevel)) * 1000); }
-    function bird() {
+    /* single drops: a tiny high ping with a fast fall, random place and time */
+    function dropLater() { later(function () { raindrop(); dropLater(); }, rand(250, 2200) / (0.4 + 0.6 * dropLevel)); }
+    var dropLevel = 0.6;
+    function raindrop() {
       if (!G || !running() || document.hidden) return;
-      var t = A.currentTime + 0.05, pan = A.createStereoPanner ? A.createStereoPanner() : gain(1);
-      if (pan.pan) pan.pan.value = rand(-0.8, 0.8);
-      var lp = filt('lowpass', 6500, 0.4), level = 0.02 * (0.4 + 0.6 * birdLevel) * rand(0.6, 1);
-      pan.connect(lp); lp.connect(G.birds);
-      var f = rand(2500, 3900), song = Math.random();
-      var n = song < 0.6 ? 2 + Math.floor(Math.random() * 4) : 2;
-      for (var i = 0; i < n; i++) {
-        var dur = song < 0.6 ? rand(0.06, 0.13) : 0.32, f0 = song < 0.6 ? f : (i ? f * 0.84 : f);
-        var o = A.createOscillator(), g = gain(0);
-        o.frequency.setValueAtTime(f0, t);
-        if (song < 0.6) { o.frequency.exponentialRampToValueAtTime(f0 * rand(1.2, 1.45), t + dur * 0.4); o.frequency.exponentialRampToValueAtTime(f0 * rand(0.85, 1.05), t + dur); }
-        else o.frequency.exponentialRampToValueAtTime(f0 * 0.97, t + dur);
-        g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(level, t + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-        o.connect(g); g.connect(pan); o.start(t); o.stop(t + dur + 0.05);
-        t += dur + (song < 0.6 ? rand(0.05, 0.12) : 0.12);
-      }
+      var t = A.currentTime + 0.02, f = rand(1800, 4200), dur = rand(0.025, 0.06), level = rand(0.004, 0.012);
+      var o = osc(f), g = gain(0), pn = panner(rand(-0.8, 0.8));
+      o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * 0.55, t + dur);
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(level, t + 0.003); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(pn); pn.connect(G.drops); o.start(t); o.stop(t + dur + 0.02);
     }
+    /* a deep, calm gong now and then, on its own: the rain steps back while it rings */
+    var GONG_NOTES = [55, 65.4, 73.4, 82.4, 98];
+    function gongLater(ms) { later(function () { if (G && running() && !document.hidden && !hushed()) { var f = pick(GONG_NOTES); gong(A.currentTime + 0.05, f, rand(9, 13), rand(-0.3, 0.3), 0.045); MT.duck(6); } gongLater(rand(45000, 90000)); }, ms); }
 
-    /* section-aware mix: forest (wind, stream, birds) near the top, sea and desert wind toward Dahab and contact */
+    /* section-aware mix: the rain is a little heavier or lighter per section */
     function mix(now) {
-      birdLevel = current[15];
+      dropLevel = 0.3 + 0.7 * current[13];
       if (!G || !running()) return;
-      var t = A.currentTime, tc = now ? 0.05 : 1.5;
-      G.wind.gain.setTargetAtTime(0.10 * current[13], t, tc);
-      G.water.gain.setTargetAtTime(0.05 * current[14], t, tc);
-      G.sea.gain.setTargetAtTime(0.09 * current[16], t, tc);
-      G.desert.gain.setTargetAtTime(0.07 * current[17], t, tc);
+      var t = A.currentTime, tc = now ? 0.05 : 2.5;
+      G.rain.gain.setTargetAtTime(0.075 * (0.55 + 0.45 * current[13]), t, tc);
     }
 
     /* a soft bowl-like tone; used for the unmute "hello" (the breath guide has its own, in site.js) */
@@ -388,9 +320,9 @@
     /* ---- Section arrival cues: deep, ritual, quiet. Fundamentals from A-minor pentatonic (D2 E2 G2 A2 C3). ---- */
     /* low gong: inharmonic partials [ratio, level, decay share, attack]; the upper ones bloom late and fade first */
     var GONG = [[1, 1, 1, 0.03], [1.48, 0.55, 0.85, 0.08], [2.11, 0.42, 0.7, 0.14], [2.69, 0.3, 0.55, 0.22], [3.37, 0.2, 0.45, 0.3], [4.12, 0.14, 0.35, 0.38], [5.33, 0.08, 0.28, 0.45], [6.71, 0.05, 0.22, 0.5]];
-    function gong(t, f, decay, pan) {
-      var bus = gain(1), lp = filt('lowpass', 1600, 0.5), pn = panner(pan); bus.connect(lp); lp.connect(pn); pn.connect(out());
-      var level = 0.05;
+    function gong(t, f, decay, pan, lvl) {
+      var bus = gain(1), lp = filt('lowpass', 1400, 0.5), pn = panner(pan); bus.connect(lp); lp.connect(pn); pn.connect(out());
+      var level = lvl || 0.04;
       GONG.forEach(function (q, i) {
         var o = osc(f), g = gain(0), fr = f * q[0] * (i ? 1 + rand(-0.004, 0.004) : 1), end = t + decay * q[2];
         o.frequency.setValueAtTime(fr * 1.012, t); o.frequency.exponentialRampToValueAtTime(fr, t + 1.2); /* the pitch settles after the strike */
@@ -427,15 +359,13 @@
       bp.frequency.setValueAtTime(f0, t); bp.frequency.exponentialRampToValueAtTime(f1, t + d);
       src.start(t, rand(0, 4)); src.stop(t + d + 0.1);
     }
-    function playCue(steps) {
-      if (!running() || !buffers || !steps) return;
-      var t0 = A.currentTime + 0.03;
-      steps.forEach(function (st) {
-        var t = t0 + st[1];
-        if (st[0] === 'gong') gong(t, st[2], st[3] || 5, st[4] || rand(-0.2, 0.2));
-        else if (st[0] === 'drum') drum(t, st[2], st[3], rand(-0.15, 0.15));
-        else if (st[0] === 'swell') swell(t, st[2], st[3], rand(-0.2, 0.2));
-      });
+    function playCue(steps, idx) {
+      if (!running() || !buffers) return;
+      var t = A.currentTime + 0.03, g = null;
+      (steps || []).forEach(function (st) { if (!g && st[0] === 'gong') g = st; });
+      var f = g ? g[2] : GONG_NOTES[(idx || 0) % GONG_NOTES.length];
+      gong(t, f, g ? Math.max(7, g[3] || 8) : 9, g && g[4] != null ? g[4] : rand(-0.25, 0.25), 0.04);
+      MT.duck(5);
     }
     function sectionCue(i) {
       if (cueSection < 0) { cueSection = i; return; } /* first reading: no cue on load */
@@ -446,7 +376,7 @@
       cueTimer = setTimeout(function () {
         var now = Date.now();
         cueSection = cuePending; cuePending = -1;
-        if (enabled && G && !hushed() && now - lastCueAt > 1800) { lastCueAt = now; playCue(STOPS[cueSection] && STOPS[cueSection].cue); }
+        if (enabled && G && !hushed() && now - lastCueAt > 1800) { lastCueAt = now; playCue(STOPS[cueSection] && STOPS[cueSection].cue, cueSection); }
       }, 700);
     }
 
@@ -459,7 +389,7 @@
       if (!snap) { snap = A.createBuffer(1, Math.floor(A.sampleRate * 0.06), A.sampleRate); var d = snap.getChannelData(0); for (var i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
       var n = A.createBufferSource(), bp = filt('bandpass', f, 9), ng = gain(0);
       n.buffer = snap; n.connect(bp); bp.connect(ng); ng.connect(out());
-      ng.gain.setValueAtTime(0, t); ng.gain.linearRampToValueAtTime(0.7, t + 0.001); ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+      ng.gain.setValueAtTime(0, t); ng.gain.linearRampToValueAtTime(0.35, t + 0.001); ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
       n.start(t); n.stop(t + 0.06);
       [[1, 0.022, 0.07], [2.57, 0.006, 0.03]].forEach(function (m) {   /* the block's body and its first overtone */
         var o = osc(f * m[0]), g = gain(0);
