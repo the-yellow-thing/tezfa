@@ -41,6 +41,7 @@
   <script>document.documentElement.classList.replace('no-js','js');</script>
 </head>
 <body>
+<canvas class="ambient-canvas" aria-hidden="true"></canvas>
 <svg xmlns="http://www.w3.org/2000/svg" class="sprite" aria-hidden="true" focusable="false">
   <symbol id="enso-shape" viewBox="0 0 240 240">
     <filter id="enso-brush" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" seed="3" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="5" xChannelSelector="R" yChannelSelector="G"/></filter>
@@ -440,6 +441,13 @@
   </div>
 </footer>
 
+<button type="button" class="ambient-toggle" data-ambient-toggle aria-pressed="false" hidden>
+  <svg class="ambient-toggle__icon" aria-hidden="true"><use href="#i-nature"/></svg>
+  <span class="ambient-toggle__label">Nature sound</span>
+  <span class="ambient-toggle__hint" data-ambient-hint aria-hidden="true"></span>
+</button>
+
 <script src="assets/js/site.js" defer></script>
+<script src="assets/js/ambient.js" defer></script>
 </body>
 </html>
