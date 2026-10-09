@@ -41,6 +41,80 @@
   /* ---- Year ---- */
   var y = document.querySelector('[data-year]'); if (y) y.textContent = String(new Date().getFullYear());
 
+  /* ---- Videos: click-to-load facades. The thumbnail is a real link to YouTube, so without JS
+     (or with a modified click) it simply opens YouTube. The "Watch on YouTube" link stays visible
+     under each video for hosts that block embedded frames. ---- */
+  var playing = [];
+  var seen = 'IntersectionObserver' in window ? new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) { e.target._inView = e.isIntersecting && e.intersectionRatio >= 0.25; });
+    if (MT.hush) MT.hush('video', playing.some(function (f) { return f._inView; }));
+  }, { threshold: [0, 0.25, 0.6] }) : null;
+  Array.prototype.forEach.call(document.querySelectorAll('[data-video]'), function (frame) {
+    var facade = frame.querySelector('.video__facade');
+    if (!facade) return;
+    facade.addEventListener('click', function (e) {
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      e.preventDefault();
+      var id = frame.getAttribute('data-video'), title = frame.getAttribute('data-title') || 'Video';
+      var f = document.createElement('iframe');
+      f.src = 'https://www.youtube-nocookie.com/embed/' + encodeURIComponent(id) + '?autoplay=1&rel=0';
+      f.title = title + ' (Mystique Tao on YouTube)';
+      f.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture');
+      f.setAttribute('allowfullscreen', '');
+      f.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+      frame.innerHTML = '';
+      frame.appendChild(f);
+      frame.classList.add('is-playing');
+      try { f.focus(); } catch (err) { /* fine */ }
+      playing.push(frame); frame._inView = true;
+      if (seen) seen.observe(frame);
+      if (MT.hush) MT.hush('video', true); /* rest the nature sound while the video is in view */
+    });
+  });
+
+  /* ---- Free practice: the recording may not exist yet. Probe it when the card comes near;
+     if it fails to load, hide the player and say it is on its way. ---- */
+  var freeAudio = document.querySelector('[data-free-audio]');
+  var freePending = document.querySelector('[data-free-pending]');
+  if (freeAudio) {
+    var missing = function () { freeAudio.hidden = true; if (freePending) freePending.hidden = false; if (MT.hush) MT.hush('audio', false); };
+    freeAudio.addEventListener('error', missing);
+    var src = freeAudio.querySelector('source'); if (src) src.addEventListener('error', missing);
+    var probe = function () { if (freeAudio.getAttribute('preload') === 'none') { freeAudio.setAttribute('preload', 'metadata'); try { freeAudio.load(); } catch (err) { missing(); } } };
+    if ('IntersectionObserver' in window) {
+      var near = new IntersectionObserver(function (entries) { if (entries.some(function (e) { return e.isIntersecting; })) { near.disconnect(); probe(); } }, { rootMargin: '600px 0px' });
+      near.observe(freeAudio);
+    } else probe();
+    freeAudio.addEventListener('play', function () { if (MT.hush) MT.hush('audio', true); });
+    freeAudio.addEventListener('pause', function () { if (MT.hush) MT.hush('audio', false); });
+    freeAudio.addEventListener('ended', function () { if (MT.hush) MT.hush('audio', false); });
+  }
+
+  /* ---- Newsletter: no backend. Validate, open a prefilled email, never claim it was sent. ---- */
+  var letter = document.querySelector('[data-letter]');
+  if (letter) {
+    letter.setAttribute('novalidate', '');
+    letter.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var input = letter.querySelector('input[type="email"]'), note = letter.querySelector('#newsletter-note');
+      var v = input ? input.value.trim() : '';
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) {
+        if (input) { input.setAttribute('aria-invalid', 'true'); input.focus(); }
+        if (note) note.textContent = 'That address doesn\u2019t look complete. Please check it.';
+        return;
+      }
+      input.removeAttribute('aria-invalid');
+      var to = 'mystic.tao.life@gmail.com';
+      window.location.href = 'mailto:' + to + '?subject=' + encodeURIComponent('Newsletter: please add me') +
+        '&body=' + encodeURIComponent('Please add this address to the Mystique Tao newsletter: ' + v);
+      if (note) {
+        note.textContent = 'Your email app should open with the message ready. If it didn\u2019t, write to ';
+        var a = document.createElement('a'); a.href = 'mailto:' + to; a.textContent = to;
+        note.appendChild(a); note.appendChild(document.createTextNode('.'));
+      }
+    });
+  }
+
   /* ---- Breath guide: labels synced to the CSS breath cycle (4 in · 2 hold · 4 out) ---- */
   var breath = document.querySelector('[data-breath]');
   if (!breath) return;
